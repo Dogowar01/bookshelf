@@ -1,6 +1,6 @@
 import * as library from './library.js';
 import { requestPersistence } from './db.js';
-import { renderShelves } from './shelf.js';
+import { renderBookcase } from './shelf.js';
 import { showBook } from './book3d.js';
 import { openEditor } from './editor.js';
 import { el, toast, today } from './ui.js';
@@ -38,27 +38,24 @@ function render() {
   const reading = books.filter((b) => b.status === 'reading').sort((a, b) => (b.startedAt || '').localeCompare(a.startedAt || ''));
   const read = books.filter((b) => b.status === 'read');
 
-  $('readingCount').textContent = reading.length ? String(reading.length) : '';
-  $('readCount').textContent = read.length ? String(read.length) : '';
-  renderStats(read);
+  renderStats(read, reading);
   renderGenreChips(read);
 
   const shown = sortRead(read.filter((b) => !state.genre || b.genre === state.genre));
 
-  const pick = (book, spine) => showBook(book, spine, bookActions);
-  renderShelves($('readingShelves'), reading, { onPick: pick, emptyText: 'Nothing on the go. Add the book you’re reading.' });
-  renderShelves($('readShelves'), shown, {
-    onPick: pick,
-    emptyText: read.length ? 'No books in this genre yet.' : 'Finished books will line up here.',
-  });
+  renderBookcase($('bookcase'), [
+    { key: 'reading', label: 'Currently reading', books: reading, emptyText: 'Nothing on the go. Add the book you’re reading.' },
+    { key: 'read', label: state.genre ? `Read · ${state.genre}` : 'Read', books: shown, emptyText: read.length ? 'No books in this genre yet.' : 'Finished books will line up here.' },
+  ], { onPick: (book, spine) => showBook(book, spine, bookActions) });
 }
 
-function renderStats(read) {
+function renderStats(read, reading) {
   const year = String(new Date().getFullYear());
   const thisYear = read.filter((b) => (b.finishedAt || '').startsWith(year)).length;
   const parts = [];
   if (read.length) parts.push(`${read.length} book${read.length === 1 ? '' : 's'} read`);
   if (thisYear) parts.push(`${thisYear} in ${year}`);
+  if (reading.length) parts.push(`${reading.length} on the go`);
   $('stats').textContent = parts.join(' · ');
 }
 

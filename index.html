@@ -12,6 +12,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="preload" href="images/bookcase.webp" as="image">
   <link rel="stylesheet" href="css/styles.css">
   <script type="module" src="js/app.js"></script>
 </head>
@@ -37,32 +38,20 @@
   </header>
 
   <main id="library">
-    <section class="case" aria-labelledby="readingHead">
-      <div class="case-head">
-        <h2 id="readingHead">Currently reading</h2>
-        <span class="count" id="readingCount"></span>
-      </div>
-      <div class="shelves" id="readingShelves"></div>
-    </section>
-
-    <section class="case" aria-labelledby="readHead">
-      <div class="case-head">
-        <h2 id="readHead">Read</h2>
-        <span class="count" id="readCount"></span>
-        <label class="sort">
-          <span class="visually-hidden">Sort by</span>
-          <select id="sortSel">
-            <option value="finished">Recently finished</option>
-            <option value="rating">Highest rated</option>
-            <option value="title">Title</option>
-            <option value="author">Author</option>
-            <option value="genre">Genre</option>
-          </select>
-        </label>
-      </div>
-      <div class="chips" id="genreChips" role="group" aria-label="Filter by genre"></div>
-      <div class="shelves" id="readShelves"></div>
-    </section>
+    <div class="controls">
+      <div class="chips" id="genreChips" role="group" aria-label="Filter read books by genre"></div>
+      <label class="sort">
+        <span class="visually-hidden">Sort read books by</span>
+        <select id="sortSel">
+          <option value="finished">Recently finished</option>
+          <option value="rating">Highest rated</option>
+          <option value="title">Title</option>
+          <option value="author">Author</option>
+          <option value="genre">Genre</option>
+        </select>
+      </label>
+    </div>
+    <div class="bookcase" id="bookcase"></div>
   </main>
 
   <input type="file" id="importInput" accept="application/json,.json" hidden>

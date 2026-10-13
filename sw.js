@@ -1,6 +1,6 @@
 // Offline support: serve the app shell from cache, refreshing it in the background.
 // Bump VERSION when shipping changes so old caches are cleared.
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE = `bookshelf-${VERSION}`;
 const SHELL = [
   './',
@@ -19,6 +19,8 @@ const SHELL = [
   'icons/icon.svg',
   'icons/icon-192.png',
   'icons/icon-512.png',
+  'images/bookcase.webp',
+  'images/room-blur.jpg',
 ];
 
 self.addEventListener('install', (e) => {

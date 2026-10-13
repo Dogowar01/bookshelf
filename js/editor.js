@@ -4,6 +4,7 @@ import { GENRES, newId, pickColor } from './library.js';
 import { fileToCanvas, rotate90, toJpeg } from './images.js';
 import { Cropper } from './cropper.js';
 import { el, starRow, today } from './ui.js';
+import { SIZES } from './shelf.js';
 
 const STEPS = ['front', 'spine', 'back', 'details'];
 
@@ -34,7 +35,7 @@ class Editor {
     const id = existing ? existing.id : newId();
     this.draft = existing
       ? { ...existing, images: { ...(existing.images || {}) } }
-      : { id, title: '', author: '', status: 'reading', genre: '', rating: 0, notes: '', startedAt: today(), finishedAt: '', images: {}, color: pickColor(id), createdAt: Date.now() };
+      : { id, title: '', author: '', status: 'reading', size: 'standard', genre: '', rating: 0, notes: '', startedAt: today(), finishedAt: '', images: {}, color: pickColor(id), createdAt: Date.now() };
     this.dirty = false;
     this.previewUrls = [];
     this.build();
@@ -230,6 +231,18 @@ class Editor {
       statusSeg.appendChild(b);
     });
 
+    const sizeSeg = el('div', 'segmented');
+    for (const [value, { label }] of Object.entries(SIZES)) {
+      const b = el('button', d.size === value ? 'on' : null, label);
+      b.type = 'button';
+      b.addEventListener('click', () => {
+        d.size = value;
+        this.dirty = true;
+        [...sizeSeg.children].forEach((c) => c.classList.toggle('on', c === b));
+      });
+      sizeSeg.appendChild(b);
+    }
+
     const genreInput = input('text', d.genre, { list: 'genre-list', autocomplete: 'off', placeholder: 'e.g. Thriller' });
     const list = el('datalist');
     list.id = 'genre-list';
@@ -271,6 +284,7 @@ class Editor {
       author,
       field('Status', statusSeg),
       dates,
+      field('Size on the shelf', sizeSeg),
       field('Genre', genreInput, list, genreChips),
       field('Rating', stars),
       field('My thoughts', notes),

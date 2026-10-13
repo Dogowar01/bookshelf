@@ -29,13 +29,16 @@ body {
   min-height: 100vh;
   font-family: var(--sans);
   color: var(--text);
-  background:
-    radial-gradient(ellipse at 50% -10%, rgba(255, 196, 120, 0.14), transparent 60%),
-    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.06) 0 2px, transparent 2px 120px),
-    linear-gradient(var(--wall-2), var(--wall));
-  background-attachment: fixed;
+  background: var(--wall);
   padding-bottom: env(safe-area-inset-bottom);
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Soft, blurred view of the room behind everything. */
+body::before {
+  content: ''; position: fixed; inset: -20px; z-index: -1;
+  background: linear-gradient(rgba(20, 12, 6, 0.55), rgba(20, 12, 6, 0.75)), url("../images/room-blur.jpg") center / cover;
+  filter: blur(8px);
 }
 
 body.no-scroll { overflow: hidden; }
@@ -85,9 +88,12 @@ button:disabled { opacity: 0.45; cursor: default; }
   -webkit-backdrop-filter: blur(8px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
-.brand h1 { margin: 0; font-family: var(--serif); font-size: 24px; font-weight: 600; letter-spacing: 0.01em; }
-.stats { margin: 2px 0 0; font-size: 13px; color: var(--text-soft); min-height: 1em; }
-.topbar-actions { display: flex; align-items: center; gap: 4px; }
+.brand { min-width: 0; }
+.brand h1 { margin: 0; white-space: nowrap; font-family: var(--serif); font-size: 24px; font-weight: 600; letter-spacing: 0.01em; }
+.stats { margin: 2px 0 0; font-size: 13px; color: var(--text-soft); min-height: 1em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topbar-actions { display: flex; align-items: center; gap: 4px; flex: none; }
+.topbar-actions .btn { white-space: nowrap; padding: 0 16px; }
+@media (max-width: 380px) { .brand h1 { font-size: 21px; } }
 
 .menu {
   position: absolute; right: 16px; top: calc(100% - 4px);
@@ -103,62 +109,50 @@ button:disabled { opacity: 0.45; cursor: default; }
 
 /* ---------- Bookcase ---------- */
 
-main { max-width: 1100px; margin: 0 auto; padding: 8px 16px 48px; }
+main { max-width: 620px; margin: 0 auto; padding: 8px 16px 48px; }
 
-.case { margin-top: 18px; }
-.case-head { display: flex; align-items: center; gap: 10px; margin: 0 4px 8px; }
-.case-head h2 { margin: 0; font-family: var(--serif); font-size: 20px; font-weight: 600; }
-.count {
-  font-size: 13px; color: var(--text-soft);
-  background: rgba(255, 255, 255, 0.08); border-radius: 999px; padding: 1px 9px;
-}
-.count:empty { display: none; }
-.sort { margin-left: auto; }
+.controls { display: flex; align-items: center; gap: 10px; margin: 6px 0 12px; min-height: 36px; }
+.controls .chips { flex: 1; min-width: 0; }
+.sort { margin-left: auto; flex: none; }
 .sort select {
   font: inherit; font-size: 14px; color: var(--text);
-  background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 999px; padding: 6px 12px; max-width: 46vw;
 }
 
-.chips { display: flex; gap: 6px; overflow-x: auto; padding: 2px 4px 10px; scrollbar-width: none; }
+.chips { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0; scrollbar-width: none; }
+.chips[hidden] { display: none; }
 .chips::-webkit-scrollbar { display: none; }
 .chip {
   flex: none; padding: 6px 12px; border-radius: 999px; font-size: 13px;
-  border: 1px solid rgba(243, 233, 216, 0.22); background: transparent;
+  border: 1px solid rgba(243, 233, 216, 0.22); background: rgba(0, 0, 0, 0.25);
 }
 .chip.on { background: var(--text); color: var(--wall); border-color: transparent; }
 
-.shelves {
-  --shelf-h: 208px;
-  padding: 10px 10px 4px;
-  border-radius: 6px;
-  background:
-    linear-gradient(90deg, rgba(0, 0, 0, 0.35), transparent 3%, transparent 97%, rgba(0, 0, 0, 0.35)),
-    linear-gradient(#1a0f07, #22140a);
-  box-shadow:
-    inset 0 0 0 10px var(--wood-lo),
-    inset 0 0 0 11px var(--wood-dark),
-    inset 0 18px 30px rgba(0, 0, 0, 0.6),
-    0 10px 30px rgba(0, 0, 0, 0.4);
+/* The bookcase is assembled from bands of images/bookcase.webp by shelf.js. */
+.bookcase {
+  max-width: 620px; margin: 0 auto;
+  border-radius: 6px; overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
 }
-
-.shelf-row { position: relative; height: var(--shelf-h); padding: 0 4px; }
-.shelf-books {
-  position: absolute; left: 4px; right: 4px; bottom: 14px;
-  display: flex; align-items: flex-end; gap: 3px; padding: 0 4px;
+.bookcase > div { background-repeat: no-repeat; }
+.case-compartment { position: relative; z-index: 1; }
+.case-plank, .case-base { position: relative; z-index: 2; }
+.case-books {
+  position: absolute; display: flex; align-items: flex-end; gap: 2px;
 }
-/* The plank each row of books stands on. */
-.shelf-row::after {
-  content: ''; position: absolute; left: -10px; right: -10px; bottom: 0; height: 16px;
-  background:
-    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.06) 0 1px, transparent 1px 37px),
-    linear-gradient(var(--wood-hi), var(--wood) 35%, var(--wood-lo));
-  box-shadow: 0 6px 10px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.25);
-  border-radius: 2px;
+.plaque {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  padding: 1px 8px; border-radius: 2px;
+  font-family: var(--serif); font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+  color: #2a1a08; white-space: nowrap;
+  background: linear-gradient(#f2d28a, #c99a45 55%, #a87a2c);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
+.case-base .plaque { top: 6px; transform: none; }
 .shelf-empty {
-  margin: 0 0 18px 8px; font-family: var(--serif); font-style: italic;
-  color: rgba(243, 233, 216, 0.45); font-size: 15px;
+  margin: 0 0 22px 4px; max-width: 100%; font-family: var(--serif); font-style: italic;
+  color: rgba(255, 238, 205, 0.85); font-size: 14px; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
 }
 
 /* ---------- Spines ---------- */
@@ -197,7 +191,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 8px 16px 48px; }
 }
 .spine-text {
   position: absolute; inset: 8px 0; display: flex; align-items: center; justify-content: center;
-  writing-mode: vertical-rl; font-family: var(--serif); font-size: 13px; font-weight: 600;
+  writing-mode: vertical-rl; font-family: var(--serif); font-size: var(--fs, 13px); font-weight: 600;
   color: rgba(255, 244, 222, 0.92); letter-spacing: 0.03em;
   overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
 }
