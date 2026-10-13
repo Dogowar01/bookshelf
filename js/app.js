@@ -8,6 +8,7 @@ import { openStats } from './stats.js';
 import { openSyncSheet } from './syncui.js';
 import { setupArrange } from './arrange.js';
 import { soundsOn, setSounds } from './sound.js';
+import { install, onInstallChange, canOfferInstall, shouldShowBanner, dismissBanner } from './install.js';
 import { el, toast, today, timeAgo } from './ui.js';
 
 const $ = (id) => document.getElementById(id);
@@ -36,6 +37,8 @@ async function init() {
   sync.onStatus(updateMenuNotes);
   sync.start();
   checkBackupReminder();
+  updateInstallUI();
+  onInstallChange(updateInstallUI);
 
   let resizeTimer;
   let lastWidth = window.innerWidth;
@@ -228,6 +231,13 @@ function updateMenuNotes() {
   $('soundsItem').textContent = `Sounds: ${soundsOn() ? 'on' : 'off'}`;
 }
 
+// ---- Installing ----
+
+function updateInstallUI() {
+  $('installItem').hidden = !canOfferInstall();
+  $('installBanner').hidden = !shouldShowBanner();
+}
+
 // ---- Chrome ----
 
 function bindChrome() {
@@ -270,11 +280,21 @@ function bindChrome() {
     const action = e.target.closest('[data-action]')?.dataset.action;
     if (action === 'export') exportBackup();
     else if (action === 'import') $('importInput').click();
+    else if (action === 'install') install();
     else if (action === 'stats') openStats();
     else if (action === 'sync') openSyncSheet();
     else if (action === 'sounds') {
       setSounds(!soundsOn());
       toast(`Sounds ${soundsOn() ? 'on' : 'off'}`);
+    }
+  });
+
+  $('installBanner').addEventListener('click', (e) => {
+    const which = e.target.dataset.install;
+    if (which === 'go') install();
+    else if (which === 'later') {
+      dismissBanner();
+      updateInstallUI();
     }
   });
 

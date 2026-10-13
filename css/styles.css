@@ -658,3 +658,15 @@ main { max-width: 620px; margin: 0 auto; padding: 8px 16px 48px; }
 .fl-date { color: var(--text-soft); grid-row: span 2; }
 .fl-title { font-family: var(--serif); }
 .fl-author { color: var(--text-soft); font-size: 12px; }
+
+/* ---------- Install ---------- */
+
+.install-banner { display: flex; gap: 12px; align-items: flex-start; }
+.banner[hidden] { display: none; }
+.install-banner img { flex: none; width: 48px; height: 48px; border-radius: 11px; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5); }
+.install-icon { width: 96px; height: 96px; border-radius: 22px; margin: 6px auto 4px; display: block; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55); }
+.install-sheet .step-title { text-align: center; }
+.install-steps { margin: 4px 0 12px; padding-left: 22px; display: flex; flex-direction: column; gap: 12px; line-height: 1.45; }
+.install-steps strong { color: var(--accent); }
+.glyph { display: inline-block; padding: 0 6px; border-radius: 6px; background: rgba(255, 255, 255, 0.1); }
+.install-note { font-size: 14px; }

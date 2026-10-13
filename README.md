@@ -56,9 +56,24 @@ python3 -m http.server 8000
 
 1. In the GitHub repo go to **Settings → Pages**, and set *Source* to "Deploy from a branch", choosing your branch and `/ (root)`.
 2. Open the published `https://<username>.github.io/bookshelf/` link on your phone.
-3. Add it to your home screen: on iPhone (Safari), tap **Share → Add to Home Screen**; on Android (Chrome), tap **⋮ → Install app**.
+3. Install it. The app shows an **Install My Bookshelf** banner, and **⋯ → Install app** is in the menu too:
+   - **Android (Chrome):** tap **Install**. This creates a real installed app (it appears in your app drawer, with no little Chrome badge on the icon), not a bookmark shortcut. If you install from Chrome's own menu instead, choose **Install app**, not "Add to home screen → Create shortcut".
+   - **iPhone/iPad (Safari):** tap **Share → Add to Home Screen → Add**. The app shows these steps for you.
 
-It then opens full-screen like a normal app, and "Take photo" uses the camera.
+It then opens full-screen with the bookcase icon, works offline, and "Take photo" uses the camera.
+
+**If an old icon shows up:** home-screen icons are fixed when the app is installed. Remove the old Bookshelf icon from your home screen (your books are kept, because they belong to the website, not the icon), then install again.
+
+### App icon
+
+The icons in `icons/` are made from `icons/logo-source.webp`:
+
+| File | Used for |
+| --- | --- |
+| `apple-touch-icon.png` | iPhone/iPad home screen (opaque, cropped to the copper frame; iOS rounds the corners itself) |
+| `app-icon-192.png`, `app-icon-512.png` | Installed app on Android/desktop, with transparent corners outside the frame |
+| `app-maskable-192.png`, `app-maskable-512.png` | Android launchers that cut icons into circles or other shapes: the bookcase artwork edge to edge, so the shape never cuts through the frame |
+| `favicon-32.png` | Browser tab |
 
 ## Project layout
 
@@ -76,7 +91,7 @@ It then opens full-screen like a normal app, and "Take photo" uses the camera.
 | `js/sound.js` | Page-turn sounds (generated, no audio files) |
 | `js/cropper.js`, `js/images.js` | Photo cropping, rotation and compression |
 | `js/library.js`, `js/db.js` | Storage and backup import/export |
-| `sw.js`, `manifest.webmanifest` | Offline support and home-screen install |
+| `sw.js`, `manifest.webmanifest`, `js/install.js` | Offline support and installing to the home screen |
 
 When you change any file, bump `VERSION` in `sw.js` so installed copies pick up the update.
 
