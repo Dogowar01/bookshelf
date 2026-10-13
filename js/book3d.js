@@ -1,8 +1,9 @@
 // The floating book: lifts out of the shelf as a 3D box (front, spine and back photos),
 // turns to face you, and opens its cover to reveal your rating and notes.
 
-import { urls } from './library.js';
-import { formatDate, el, starRow } from './ui.js';
+import { urls, FORMATS } from './library.js';
+import { formatDate, el, starRow, today } from './ui.js';
+import { pageTurn, coverClose, slideOut } from './sound.js';
 
 const FLY_MS = 850;
 const COVER_MS = 750;
@@ -14,6 +15,9 @@ export function showBook(book, spine, actions) {
   if (active) return;
   active = new FloatingBook(book, spine, actions);
 }
+
+// The id of the book currently floating, so a redrawn shelf can keep its gap.
+export const activeBookId = () => (active ? active.book.id : null);
 
 export function closeActiveBook() {
   return active ? active.close() : Promise.resolve();
@@ -94,9 +98,10 @@ class FloatingBook {
     const front = el('div', 'cover-front');
     paint(front, u.front, book, 'front');
     const inside = el('div', 'cover-inside');
+    const firstQuote = book.quotes && book.quotes[0];
     inside.append(
       el('p', 'ex-libris', 'Ex Libris'),
-      el('p', 'inside-title', book.title),
+      firstQuote ? el('p', 'inside-quote', `“${firstQuote.text}”`) : el('p', 'inside-title', book.title),
       el('p', 'inside-hint', 'Tap to close'),
     );
     this.cover.append(front, inside);
@@ -127,47 +132,151 @@ class FloatingBook {
     document.addEventListener('keydown', this.onKey);
   }
 
+  // Applies a change, then redraws the page with the saved book.
+  async update(patch, message) {
+    this.book = await this.actions.update(this.book, patch, message);
+    this.renderPage();
+  }
+
   renderPage() {
     const b = this.book;
     const inner = el('div', 'page-inner');
 
-    const status = b.status === 'reading'
-      ? `Reading${b.startedAt ? ` · since ${formatDate(b.startedAt)}` : ''}`
-      : `Read${b.finishedAt ? ` · finished ${formatDate(b.finishedAt)}` : ''}`;
+    const status = {
+      want: `Want to read${b.wantedAt ? ` · added ${formatDate(b.wantedAt)}` : ''}`,
+      reading: `Reading${b.startedAt ? ` · since ${formatDate(b.startedAt)}` : ''}`,
+      read: `Read${b.finishedAt ? ` · finished ${formatDate(b.finishedAt)}` : ''}`,
+    }[b.status] || '';
     inner.append(el('p', 'page-status', status), el('h2', 'page-title', b.title));
     if (b.author) inner.append(el('p', 'page-author', `by ${b.author}`));
 
-    const stars = starRow(b.rating || 0, async (r) => {
-      this.book = await this.actions.onRate(b, r);
-      this.renderPage();
-    });
-    inner.append(stars);
-    if (b.genre) inner.append(el('span', 'genre-tag', b.genre));
-
-    inner.append(el('h3', 'page-sub', 'My thoughts'));
-    inner.append(el('p', b.notes ? 'page-notes' : 'page-notes empty', b.notes || 'No notes yet.'));
-
-    const acts = el('div', 'page-actions');
-    if (b.status === 'reading') {
-      const fin = el('button', 'btn btn-small btn-primary', 'Finished it!');
-      fin.addEventListener('click', async () => {
-        this.book = await this.actions.onFinish(b);
-        this.renderPage();
-      });
-      acts.append(fin);
+    if (b.lentTo) {
+      const lent = el('div', 'lent-note');
+      lent.append(el('span', null, `Lent to ${b.lentTo}${b.lentAt ? ` on ${formatDate(b.lentAt)}` : ''}`));
+      const back = el('button', 'btn btn-small', 'It’s back');
+      back.addEventListener('click', () => this.update({ lentTo: '', lentAt: '' }, `“${b.title}” is back on the shelf`));
+      lent.append(back);
+      inner.append(lent);
     }
-    const edit = el('button', 'btn btn-small', 'Edit');
-    edit.addEventListener('click', () => this.close().then(() => this.actions.onEdit(this.book)));
-    const del = el('button', 'btn btn-small btn-danger', 'Remove');
-    del.addEventListener('click', async () => {
+
+    if (b.status !== 'want') {
+      inner.append(starRow(b.rating || 0, (r) => this.update({ rating: r })));
+    }
+    const tags = el('div', 'tags');
+    if (b.genre) tags.append(el('span', 'genre-tag', b.genre));
+    if (b.format && b.format !== 'print') tags.append(el('span', 'genre-tag tag-light', FORMATS[b.format]));
+    const facts = [b.pages && `${b.pages} pages`, b.year].filter(Boolean).join(' · ');
+    if (facts) tags.append(el('span', 'page-facts', facts));
+    if (tags.children.length) inner.append(tags);
+
+    if (b.status === 'reading') inner.append(this.progressBlock());
+
+    if (b.status !== 'want' || b.notes) {
+      inner.append(el('h3', 'page-sub', b.status === 'want' ? 'Notes' : 'My thoughts'));
+      inner.append(el('p', b.notes ? 'page-notes' : 'page-notes empty', b.notes || 'No notes yet.'));
+    }
+
+    if (b.quotes && b.quotes.length) {
+      inner.append(el('h3', 'page-sub', 'Favourite quotes'));
+      for (const q of b.quotes) {
+        const bq = el('blockquote', 'quote', q.text);
+        if (q.page) bq.append(el('cite', null, `p. ${q.page}`));
+        inner.append(bq);
+      }
+    }
+
+    if (b.reads && b.reads.length) {
+      const times = b.reads.length + (b.status === 'read' ? 1 : 0);
+      inner.append(el('h3', 'page-sub', times > 1 ? `Read ${times} times · earlier reads` : 'Earlier reads'));
+      for (const r of [...b.reads].reverse()) {
+        const item = el('div', 'past-read');
+        const when = [r.startedAt && formatDate(r.startedAt), r.finishedAt && formatDate(r.finishedAt)].filter(Boolean).join(' – ');
+        item.append(el('p', 'past-when', `${when || 'Undated'}${r.rating ? ` · ${'★'.repeat(r.rating)}` : ''}`));
+        if (r.notes) item.append(el('p', 'past-notes', r.notes));
+        inner.append(item);
+      }
+    }
+
+    inner.append(this.actionsBlock());
+    this.page.replaceChildren(inner);
+  }
+
+  progressBlock() {
+    const b = this.book;
+    const box = el('div', 'progress-block');
+    const pct = b.pages ? Math.min(100, Math.round(((b.currentPage || 0) / b.pages) * 100)) : null;
+    if (pct !== null) {
+      const bar = el('div', 'reading-bar');
+      const fill = el('span');
+      fill.style.width = `${pct}%`;
+      bar.append(fill);
+      box.append(bar);
+    }
+    const form = el('form', 'progress-form');
+    const label = el('label', null, 'Page');
+    const inp = el('input');
+    inp.type = 'number';
+    inp.min = '0';
+    inp.inputMode = 'numeric';
+    inp.value = b.currentPage || '';
+    inp.placeholder = '0';
+    if (b.pages) inp.max = String(b.pages);
+    label.append(inp);
+    form.append(label, el('span', null, b.pages ? `of ${b.pages}${pct !== null ? ` · ${pct}%` : ''}` : ''));
+    const save = el('button', 'btn btn-small', 'Update');
+    form.append(save);
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const page = Math.max(0, Number(inp.value) || 0);
+      if (b.pages && page >= b.pages && confirm('That’s the last page. Mark it as finished?')) {
+        this.finish();
+        return;
+      }
+      this.update({ currentPage: page });
+    });
+    box.append(form);
+    return box;
+  }
+
+  finish() {
+    pageTurn();
+    return this.update({ status: 'read', finishedAt: this.book.finishedAt || today(), currentPage: this.book.pages || this.book.currentPage }, 'Finished! It’s moved to your Read shelf.');
+  }
+
+  actionsBlock() {
+    const b = this.book;
+    const acts = el('div', 'page-actions');
+    const button = (label, cls, fn) => {
+      const btn = el('button', `btn btn-small ${cls}`, label);
+      btn.addEventListener('click', fn);
+      acts.append(btn);
+    };
+
+    if (b.status === 'want') {
+      button('Start reading', 'btn-primary', () => this.update({ status: 'reading', startedAt: today(), currentPage: 0 }, 'Enjoy it! It’s on your Currently reading shelf.'));
+    } else if (b.status === 'reading') {
+      button('Finished it!', 'btn-primary', () => this.finish());
+    } else if (b.status === 'read') {
+      button('Read again', '', () => {
+        if (!confirm('Start a re-read? This read’s dates, rating and thoughts will be kept under “Earlier reads”.')) return;
+        const past = { startedAt: b.startedAt || '', finishedAt: b.finishedAt || '', rating: b.rating || 0, notes: b.notes || '' };
+        this.update({ reads: [...(b.reads || []), past], status: 'reading', startedAt: today(), finishedAt: '', currentPage: 0, rating: 0, notes: '' }, 'Back on your Currently reading shelf');
+      });
+    }
+
+    if (!b.lentTo) {
+      button('Lend', '', () => {
+        const who = prompt('Who are you lending it to?');
+        if (who && who.trim()) this.update({ lentTo: who.trim(), lentAt: today() }, `Lent to ${who.trim()}`);
+      });
+    }
+    button('Edit', '', () => this.close().then(() => this.actions.onEdit(this.book)));
+    button('Remove', 'btn-danger', async () => {
       if (!confirm(`Remove “${b.title}” from your library?`)) return;
       await this.close({ toShelf: false });
       this.actions.onDelete(b);
     });
-    acts.append(edit, del);
-    inner.append(acts);
-
-    this.page.replaceChildren(inner);
+    return acts;
   }
 
   transformAt(x, y, z, scale, angle) {
@@ -190,6 +299,7 @@ class FloatingBook {
     const f = this.spineFrames();
     this.spine.classList.add('lifted');
     this.root.classList.add('visible');
+    slideOut();
     const anim = this.pos.animate(
       [
         { transform: f.onShelf },
@@ -209,6 +319,7 @@ class FloatingBook {
   toggleCover() {
     if (this.busy || this.isFlipped) return;
     this.isOpen = !this.isOpen;
+    (this.isOpen ? pageTurn : coverClose)();
     this.root.classList.toggle('is-open', this.isOpen);
     this.hint.textContent = this.isOpen ? 'Tap the inside cover to close' : 'Tap the cover to open';
     this.flipBtn.disabled = this.isOpen;
@@ -217,6 +328,7 @@ class FloatingBook {
   flip() {
     if (this.busy || this.isOpen) return;
     this.isFlipped = !this.isFlipped;
+    slideOut();
     this.root.classList.toggle('is-flipped', this.isFlipped);
     this.hint.textContent = this.isFlipped ? 'Tap to turn back over' : 'Tap the cover to open';
   }
@@ -226,6 +338,7 @@ class FloatingBook {
     this.closing = (async () => {
       this.busy = true;
       if (this.isOpen || this.isFlipped) {
+        if (this.isOpen) coverClose();
         this.root.classList.remove('is-open', 'is-flipped');
         this.isOpen = this.isFlipped = false;
         await wait(COVER_MS);

@@ -32,18 +32,39 @@
       </button>
     </div>
     <div id="menu" class="menu" role="menu" hidden>
-      <button role="menuitem" data-action="export">Export backup</button>
+      <button role="menuitem" data-action="stats">Year in review</button>
+      <button role="menuitem" data-action="sync">Sync across devices<small id="syncNote"></small></button>
+      <button role="menuitem" data-action="export">Export backup<small id="backupNote"></small></button>
       <button role="menuitem" data-action="import">Import backup</button>
+      <button role="menuitem" data-action="sounds" id="soundsItem">Sounds: on</button>
     </div>
   </header>
 
   <main id="library">
+    <div class="banner" id="backupBanner" hidden>
+      <p>It’s been a while since you backed up your library. Your books only live on this device.</p>
+      <div class="banner-actions">
+        <button class="btn btn-small btn-primary" data-banner="backup">Back up now</button>
+        <button class="btn btn-small btn-ghost" data-banner="sync">Set up sync</button>
+        <button class="btn btn-small btn-ghost" data-banner="later">Later</button>
+      </div>
+    </div>
+    <div class="searchbar">
+      <label class="search">
+        <span class="visually-hidden">Search your books</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+        <input type="search" id="searchInput" placeholder="Search titles, authors, genres" autocomplete="off">
+      </label>
+      <button class="btn btn-small" id="arrangeBtn" aria-pressed="false">Arrange</button>
+    </div>
+    <p class="arrange-hint" id="arrangeHint" hidden>Drag books to reorder them on their shelf, then tap Done.</p>
     <div class="controls">
       <div class="chips" id="genreChips" role="group" aria-label="Filter read books by genre"></div>
       <label class="sort">
         <span class="visually-hidden">Sort read books by</span>
         <select id="sortSel">
           <option value="finished">Recently finished</option>
+          <option value="custom">My order</option>
           <option value="rating">Highest rated</option>
           <option value="title">Title</option>
           <option value="author">Author</option>

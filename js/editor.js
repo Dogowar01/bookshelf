@@ -1,12 +1,13 @@
-// Add / edit wizard: photograph the front, spine and back, then fill in your thoughts.
+// Add / edit wizard: find the book, photograph the front, spine and back, then fill in your thoughts.
 
-import { GENRES, newId, pickColor } from './library.js';
+import { GENRES, FORMATS, newId, pickColor, nextOrder } from './library.js';
+import { normaliseIsbn, lookupIsbn, searchBooks, fetchCover, canScan, scanIsbn } from './lookup.js';
 import { fileToCanvas, rotate90, toJpeg } from './images.js';
 import { Cropper } from './cropper.js';
 import { el, starRow, today } from './ui.js';
 import { SIZES } from './shelf.js';
 
-const STEPS = ['front', 'spine', 'back', 'details'];
+const STEPS = ['find', 'front', 'spine', 'back', 'details'];
 
 const PHOTO_COPY = {
   front: {
@@ -35,7 +36,13 @@ class Editor {
     const id = existing ? existing.id : newId();
     this.draft = existing
       ? { ...existing, images: { ...(existing.images || {}) } }
-      : { id, title: '', author: '', status: 'reading', size: 'standard', genre: '', rating: 0, notes: '', startedAt: today(), finishedAt: '', images: {}, color: pickColor(id), createdAt: Date.now() };
+      : {
+          id, title: '', author: '', status: 'reading', format: 'print', size: 'standard', genre: '', rating: 0, notes: '',
+          quotes: [], pages: null, currentPage: 0, isbn: '', year: null, startedAt: today(), finishedAt: '',
+          images: {}, imageRev: {}, color: pickColor(id), order: nextOrder(), createdAt: Date.now(),
+        };
+    this.draft.imageRev = { ...(this.draft.imageRev || {}) };
+    this.draft.quotes = (this.draft.quotes || []).map((q) => ({ ...q }));
     this.dirty = false;
     this.previewUrls = [];
     this.build();
@@ -85,12 +92,14 @@ class Editor {
     if (i < 0 || i >= STEPS.length) return;
     this.step = i;
     this.stopCrop();
+    this.stopScan();
     [...this.progress.children].forEach((s, j) => s.classList.toggle('on', j <= i));
     this.backBtn.style.visibility = i > 0 ? 'visible' : 'hidden';
     this.heading.textContent = `${this.isNew ? 'Add a book' : 'Edit book'} · ${i + 1} of ${STEPS.length}`;
     this.revokePreviews();
     const kind = STEPS[i];
     if (kind === 'details') this.renderDetails();
+    else if (kind === 'find') this.renderFind();
     else this.renderPhoto(kind);
     this.body.scrollTop = 0;
   }
@@ -112,6 +121,11 @@ class Editor {
     }
 
     const actions = el('div', 'step-actions');
+    if (kind === 'front' && !blob && this.found && this.found.coverUrl) {
+      const useCover = el('button', 'btn', 'Use the published cover');
+      useCover.addEventListener('click', () => this.usePublishedCover(useCover));
+      actions.append(useCover);
+    }
     const take = el('button', 'btn btn-primary', blob ? 'Retake photo' : 'Take photo');
     take.addEventListener('click', () => this.camInput.click());
     const pick = el('button', 'btn', 'Choose from library');
@@ -125,6 +139,7 @@ class Editor {
       const remove = el('button', 'btn btn-ghost', 'Remove');
       remove.addEventListener('click', () => {
         delete this.draft.images[kind];
+        delete this.draft.imageRev[kind];
         this.dirty = true;
         this.go(this.step);
       });
@@ -179,6 +194,7 @@ class Editor {
   async storeImage(kind, canvas) {
     const { blob, aspect } = await toJpeg(canvas, kind === 'spine' ? 1400 : 1200);
     this.draft.images[kind] = blob;
+    this.draft.imageRev[kind] = newId();
     this.draft[`${kind === 'front' ? 'cover' : kind}Aspect`] = aspect;
     this.dirty = true;
   }
@@ -186,6 +202,185 @@ class Editor {
   async rotateStored(kind) {
     const canvas = await fileToCanvas(this.draft.images[kind], 1400);
     await this.storeImage(kind, rotate90(canvas, 1));
+    this.go(this.step);
+  }
+
+  // ---- Find step ----
+
+  renderFind() {
+    const wrap = el('div', 'find');
+
+    const scanBox = el('div', 'scan-box');
+    const scanBtn = el('button', 'btn btn-primary btn-block', 'Scan the barcode');
+    scanBtn.hidden = !canScan();
+    scanBtn.addEventListener('click', () => this.startScan(scanBox, scanBtn));
+    scanBox.append(scanBtn);
+
+    const isbnForm = el('form', 'inline-form');
+    const isbnInput = input('text', '', { inputmode: 'numeric', placeholder: 'ISBN, e.g. 9780141439518', autocomplete: 'off', 'aria-label': 'ISBN' });
+    const isbnBtn = el('button', 'btn', 'Look up');
+    isbnForm.append(isbnInput, isbnBtn);
+    isbnForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const isbn = normaliseIsbn(isbnInput.value);
+      if (!isbn) return this.findMessage('That ISBN doesn’t look right. It’s the 10 or 13 digit number by the barcode.');
+      this.lookup(isbn);
+    });
+
+    const searchForm = el('form', 'inline-form');
+    const searchInput = input('search', '', { placeholder: 'Title and/or author', autocomplete: 'off', 'aria-label': 'Search by title or author' });
+    const searchBtn = el('button', 'btn', 'Search');
+    searchForm.append(searchInput, searchBtn);
+    searchForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!searchInput.value.trim()) return;
+      this.findMessage('Searching…');
+      try {
+        const results = await searchBooks(searchInput.value);
+        this.showResults(results);
+      } catch {
+        this.findMessage('Couldn’t reach the book database. Check your connection, or skip and type the details in.');
+      }
+    });
+
+    this.findOut = el('div', 'find-out');
+    if (this.found) this.showFound(this.found);
+
+    const skip = el('button', 'btn btn-ghost', this.found ? 'Next →' : 'Skip, I’ll type it in →');
+    skip.addEventListener('click', () => this.go(this.step + 1));
+    const nav = el('div', 'step-nav');
+    nav.append(skip);
+
+    wrap.append(
+      scanBox,
+      el('p', 'or', 'or'),
+      field('ISBN', isbnForm),
+      field('Search', searchForm),
+      this.findOut,
+    );
+    this.body.replaceChildren(
+      el('h2', 'step-title', 'Find your book'),
+      el('p', 'step-text', 'Scan the barcode on the back, or search, and the title, author and page count are filled in for you.'),
+      wrap,
+      nav,
+    );
+  }
+
+  async startScan(box, btn) {
+    btn.hidden = true;
+    const video = el('video', 'scan-video');
+    video.muted = true;
+    video.setAttribute('playsinline', '');
+    const frame = el('div', 'scan-frame');
+    const cancel = el('button', 'btn btn-ghost btn-small', 'Cancel');
+    const view = el('div', 'scan-view');
+    view.append(video, frame);
+    box.append(view, cancel);
+    const reset = () => {
+      view.remove();
+      cancel.remove();
+      btn.hidden = false;
+    };
+    cancel.addEventListener('click', () => {
+      this.stopScan();
+      reset();
+    });
+    this.scanner = scanIsbn(video);
+    try {
+      const isbn = await this.scanner.result;
+      this.scanner = null;
+      reset();
+      this.lookup(isbn);
+    } catch (err) {
+      this.scanner = null;
+      if (err.message === 'stopped') return;
+      reset();
+      this.findMessage(err.name === 'NotAllowedError'
+        ? 'The camera was blocked. Allow camera access for this site, or type the ISBN instead.'
+        : 'Couldn’t start the scanner on this device. Type the ISBN instead.');
+    }
+  }
+
+  stopScan() {
+    if (this.scanner) this.scanner.stop();
+    this.scanner = null;
+  }
+
+  async lookup(isbn) {
+    this.findMessage('Looking it up…');
+    try {
+      const book = await lookupIsbn(isbn);
+      if (book) this.choose(book);
+      else this.findMessage(`No details found for ISBN ${isbn}. Skip and type them in. The ISBN has been saved.`, () => {
+        this.draft.isbn = isbn;
+      });
+    } catch {
+      this.findMessage('Couldn’t reach the book database. Check your connection, or skip and type the details in.');
+    }
+  }
+
+  findMessage(text, then) {
+    this.findOut.replaceChildren(el('p', 'find-msg', text));
+    if (then) then();
+  }
+
+  showResults(results) {
+    if (!results.length) return this.findMessage('Nothing found. Try fewer words, or skip and type it in.');
+    const list = el('ul', 'results');
+    for (const r of results) {
+      const li = el('li');
+      const b = el('button', 'result');
+      b.type = 'button';
+      const thumb = el('span', 'result-thumb');
+      if (r.thumbUrl) thumb.style.backgroundImage = `url("${r.thumbUrl}")`;
+      const text = el('span', 'result-text');
+      text.append(el('strong', null, r.title), el('span', null, [r.author, r.year].filter(Boolean).join(' · ')));
+      b.append(thumb, text);
+      b.addEventListener('click', () => this.choose(r));
+      li.append(b);
+      list.append(li);
+    }
+    this.findOut.replaceChildren(list);
+  }
+
+  choose(found) {
+    this.found = found;
+    const d = this.draft;
+    d.title = found.title || d.title;
+    d.author = found.author || d.author;
+    if (found.pages) d.pages = found.pages;
+    if (found.year) d.year = found.year;
+    if (found.isbn) d.isbn = found.isbn;
+    if (found.genre && !d.genre) d.genre = found.genre;
+    this.dirty = true;
+    this.showFound(found);
+  }
+
+  showFound(found) {
+    const card = el('div', 'found');
+    const thumb = el('span', 'result-thumb');
+    if (found.thumbUrl) thumb.style.backgroundImage = `url("${found.thumbUrl}")`;
+    const text = el('div', 'result-text');
+    text.append(
+      el('strong', null, found.title),
+      el('span', null, [found.author, found.year, found.pages && `${found.pages} pages`].filter(Boolean).join(' · ')),
+    );
+    const next = el('button', 'btn btn-primary btn-small', 'That’s it →');
+    next.addEventListener('click', () => this.go(this.step + 1));
+    card.append(thumb, text, next);
+    this.findOut.replaceChildren(card);
+  }
+
+  async usePublishedCover(btn) {
+    btn.disabled = true;
+    btn.textContent = 'Fetching cover…';
+    const blob = await fetchCover(this.found.coverUrl);
+    if (!blob) {
+      btn.textContent = 'Cover not available';
+      return;
+    }
+    const canvas = await fileToCanvas(blob, 1400);
+    await this.storeImage('front', canvas);
     this.go(this.step);
   }
 
@@ -197,14 +392,14 @@ class Editor {
     form.noValidate = true;
 
     const thumbs = el('div', 'thumbs');
-    ['front', 'spine', 'back'].forEach((kind, i) => {
+    ['front', 'spine', 'back'].forEach((kind) => {
       const t = el('button', `thumb thumb-${kind}`);
       t.type = 'button';
       t.setAttribute('aria-label', `${PHOTO_COPY[kind].title} photo`);
       if (d.images[kind]) t.style.backgroundImage = `url("${this.preview(d.images[kind])}")`;
       else t.appendChild(el('span', null, '+'));
       t.appendChild(el('small', null, PHOTO_COPY[kind].title));
-      t.addEventListener('click', () => this.go(i));
+      t.addEventListener('click', () => this.go(STEPS.indexOf(kind)));
       thumbs.appendChild(t);
     });
 
@@ -214,13 +409,19 @@ class Editor {
     const statusSeg = el('div', 'segmented');
     const finishedField = field('Finished', input('date', d.finishedAt));
     const startedField = field('Started', input('date', d.startedAt));
+    const pagesInput = input('number', d.pages || '', { min: 1, inputmode: 'numeric', placeholder: 'e.g. 320' });
+    const currentInput = input('number', d.currentPage || '', { min: 0, inputmode: 'numeric', placeholder: '0' });
+    const currentField = field('Page I’m on', currentInput);
     const setStatus = (s) => {
       d.status = s;
       [...statusSeg.children].forEach((b) => b.classList.toggle('on', b.dataset.value === s));
       finishedField.hidden = s !== 'read';
+      startedField.hidden = s === 'want';
+      currentField.hidden = s !== 'reading';
       if (s === 'read' && !finishedField.querySelector('input').value) finishedField.querySelector('input').value = today();
+      if (s !== 'want' && !startedField.querySelector('input').value) startedField.querySelector('input').value = today();
     };
-    [['reading', 'Reading now'], ['read', 'Finished']].forEach(([value, label]) => {
+    [['want', 'Want to read'], ['reading', 'Reading'], ['read', 'Finished']].forEach(([value, label]) => {
       const b = el('button', null, label);
       b.type = 'button';
       b.dataset.value = value;
@@ -230,6 +431,18 @@ class Editor {
       });
       statusSeg.appendChild(b);
     });
+
+    const formatSeg = el('div', 'segmented');
+    for (const [value, label] of Object.entries(FORMATS)) {
+      const b = el('button', (d.format || 'print') === value ? 'on' : null, label);
+      b.type = 'button';
+      b.addEventListener('click', () => {
+        d.format = value;
+        this.dirty = true;
+        [...formatSeg.children].forEach((c) => c.classList.toggle('on', c === b));
+      });
+      formatSeg.appendChild(b);
+    }
 
     const sizeSeg = el('div', 'segmented');
     for (const [value, { label }] of Object.entries(SIZES)) {
@@ -274,6 +487,43 @@ class Editor {
 
     const dates = el('div', 'field-row');
     dates.append(startedField, finishedField);
+    const pageRow = el('div', 'field-row');
+    pageRow.append(field('Pages', pagesInput), currentField);
+
+    const quotesBox = el('div', 'quotes-edit');
+    const drawQuotes = () => {
+      quotesBox.replaceChildren();
+      d.quotes.forEach((q, i) => {
+        const row = el('div', 'quote-row');
+        const text = el('textarea');
+        text.rows = 2;
+        text.value = q.text;
+        text.placeholder = 'A line you loved…';
+        text.setAttribute('aria-label', `Quote ${i + 1}`);
+        text.addEventListener('input', () => (q.text = text.value));
+        const page = input('number', q.page || '', { min: 1, inputmode: 'numeric', placeholder: 'p.', 'aria-label': `Page of quote ${i + 1}` });
+        page.addEventListener('input', () => (q.page = Number(page.value) || null));
+        const rm = el('button', 'icon-btn quote-remove', '✕');
+        rm.type = 'button';
+        rm.setAttribute('aria-label', 'Remove quote');
+        rm.addEventListener('click', () => {
+          d.quotes.splice(i, 1);
+          this.dirty = true;
+          drawQuotes();
+        });
+        row.append(text, page, rm);
+        quotesBox.append(row);
+      });
+      const add = el('button', 'btn btn-small', '+ Add a quote');
+      add.type = 'button';
+      add.addEventListener('click', () => {
+        d.quotes.push({ text: '', page: null });
+        drawQuotes();
+        quotesBox.querySelectorAll('textarea')[d.quotes.length - 1].focus();
+      });
+      quotesBox.append(add);
+    };
+    drawQuotes();
 
     const saveBtn = el('button', 'btn btn-primary btn-block', this.isNew ? 'Put it on the shelf' : 'Save changes');
     saveBtn.type = 'submit';
@@ -284,10 +534,13 @@ class Editor {
       author,
       field('Status', statusSeg),
       dates,
+      pageRow,
+      field('Format', formatSeg),
       field('Size on the shelf', sizeSeg),
       field('Genre', genreInput, list, genreChips),
       field('Rating', stars),
       field('My thoughts', notes),
+      field('Favourite quotes', quotesBox),
       saveBtn,
     );
     form.addEventListener('input', () => {
@@ -307,9 +560,13 @@ class Editor {
         author: author.querySelector('input').value.trim(),
         genre: genreInput.value.trim(),
         notes: notes.value.trim(),
-        startedAt: startedField.querySelector('input').value,
+        startedAt: d.status === 'want' ? '' : startedField.querySelector('input').value,
         finishedAt: d.status === 'read' ? finishedField.querySelector('input').value : '',
+        pages: Number(pagesInput.value) || null,
+        currentPage: d.status === 'reading' ? Math.max(0, Number(currentInput.value) || 0) : d.currentPage || 0,
+        quotes: d.quotes.map((q) => ({ text: q.text.trim(), page: q.page || null })).filter((q) => q.text),
       });
+      if (d.status === 'want' && !d.wantedAt) d.wantedAt = today();
       if (!d.images.front && d.backAspect) d.coverAspect = d.backAspect;
       try {
         const saved = await this.save(d);
@@ -345,6 +602,7 @@ class Editor {
 
   finish(result) {
     this.stopCrop();
+    this.stopScan();
     this.root.classList.remove('visible');
     setTimeout(() => {
       this.revokePreviews();

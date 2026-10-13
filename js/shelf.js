@@ -43,8 +43,9 @@ export function spineSize(book, clearance) {
 
 /**
  * sections: [{ key, label, books, emptyText }]. Each section starts on a fresh shelf.
+ * match: optional (book) => boolean; when given, matching spines glow and the rest dim.
  */
-export function renderBookcase(container, sections, { onPick }) {
+export function renderBookcase(container, sections, { onPick, match = null }) {
   const width = container.clientWidth;
   if (!width) return;
   const s = width / (CROP_X[1] - CROP_X[0]);
@@ -63,7 +64,7 @@ export function renderBookcase(container, sections, { onPick }) {
         shelf = { items: [], used: 0 };
         shelves.push(shelf);
       }
-      shelf.items.push({ book, size });
+      shelf.items.push({ book, size, section: section.key });
       shelf.used += size.w + GAP;
     }
   }
@@ -98,7 +99,12 @@ export function renderBookcase(container, sections, { onPick }) {
       width: `${innerW}px`,
       bottom: `${-SINK}px`,
     });
-    for (const { book, size } of shelf.items) row.appendChild(spineEl(book, size, onPick));
+    for (const { book, size, section } of shelf.items) {
+      const spine = spineEl(book, size, onPick);
+      spine.dataset.section = section;
+      if (match) spine.classList.add(match(book) ? 'match' : 'dim');
+      row.appendChild(spine);
+    }
     if (shelf.empty) {
       const p = document.createElement('p');
       p.className = 'shelf-empty';
@@ -148,9 +154,26 @@ function spineEl(book, { w, h }, onPick) {
     el.appendChild(t);
   }
   if (book.status === 'reading') {
+    // The ribbon hangs further down the spine the further through the book you are.
+    const progress = book.pages ? Math.min(1, (book.currentPage || 0) / book.pages) : 0;
     const mark = document.createElement('span');
     mark.className = 'bookmark';
+    mark.style.height = `${Math.round(18 + progress * (h * 0.55))}px`;
     el.appendChild(mark);
+  }
+  if (book.format === 'ebook' || book.format === 'audiobook') {
+    const badge = document.createElement('span');
+    badge.className = `format-badge ${book.format}`;
+    badge.title = book.format === 'ebook' ? 'Ebook' : 'Audiobook';
+    el.appendChild(badge);
+  }
+  if (book.lentTo) {
+    el.classList.add('lent');
+    el.setAttribute('aria-label', `${el.getAttribute('aria-label')}, lent to ${book.lentTo}`);
+    const tag = document.createElement('span');
+    tag.className = 'lent-tag';
+    tag.textContent = 'Lent';
+    el.appendChild(tag);
   }
   el.addEventListener('click', () => onPick(book, el));
   return el;

@@ -1,6 +1,6 @@
 // Offline support: serve the app shell from cache, refreshing it in the background.
 // Bump VERSION when shipping changes so old caches are cleared.
-const VERSION = 'v2';
+const VERSION = 'v3';
 const CACHE = `bookshelf-${VERSION}`;
 const SHELL = [
   './',
@@ -8,13 +8,19 @@ const SHELL = [
   'manifest.webmanifest',
   'css/styles.css',
   'js/app.js',
+  'js/arrange.js',
   'js/book3d.js',
   'js/cropper.js',
   'js/db.js',
   'js/editor.js',
   'js/images.js',
   'js/library.js',
+  'js/lookup.js',
   'js/shelf.js',
+  'js/sound.js',
+  'js/stats.js',
+  'js/sync.js',
+  'js/syncui.js',
   'js/ui.js',
   'icons/icon.svg',
   'icons/icon-192.png',
