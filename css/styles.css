@@ -670,3 +670,7 @@ main { max-width: 620px; margin: 0 auto; padding: 8px 16px 48px; }
 .install-steps strong { color: var(--accent); }
 .glyph { display: inline-block; padding: 0 6px; border-radius: 6px; background: rgba(255, 255, 255, 0.1); }
 .install-note { font-size: 14px; }
+.install-sheet a.btn { text-decoration: none; margin: 4px 0 14px; }
+.install-sheet a.btn-primary { color: var(--accent-ink); font-size: 16px; }
+.install-alt { margin-top: 8px; }
+.install-alt summary { cursor: pointer; color: var(--accent); }

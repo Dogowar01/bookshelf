@@ -95,22 +95,45 @@ function showInstructions() {
     steps.append(li);
   };
 
+  const note = el('p', 'step-text install-note');
+  let extra = null;
+
   if (ios) {
-    if (iosNotSafari) step('If you don’t see <strong>Add to Home Screen</strong> below, open this page in <strong>Safari</strong> and do it there.');
-    step('Tap the <strong>Share</strong> button <span class="glyph" aria-hidden="true">⬆︎</span> (at the bottom of Safari, or at the top on iPad).');
-    step('Scroll down and tap <strong>Add to Home Screen</strong>.');
-    step('Make sure <strong>Open as Web App</strong> is on if you see it, then tap <strong>Add</strong>.');
-    step('Open <strong>Bookshelf</strong> from your home screen. It opens full screen with your bookcase icon.');
+    // Safari's own Add to Home Screen doesn't reliably pick up the icon, so the main route is a
+    // small profile with the icon built in (the same fix that worked for Market Ledger).
+    if (iosNotSafari) step('Open this page in <strong>Safari</strong> first. Only Safari can add the profile.');
+    step('If there’s an old <strong>Bookshelf</strong> icon on your home screen, press and hold it, then tap <strong>Remove App → Delete Bookmark</strong>.');
+    step('Tap <strong>Get the home-screen profile</strong> below, then tap <strong>Allow</strong>.');
+    step('Open the <strong>Settings</strong> app and tap <strong>Profile Downloaded</strong> near the top (or go to <strong>General → VPN &amp; Device Management</strong>).');
+    step('Tap <strong>Install</strong>, enter your passcode, then <strong>Install</strong> again and <strong>Done</strong>.');
+    step('<strong>Bookshelf</strong> is now on your home screen with the bookcase icon, and opens full screen.');
+
+    extra = el('a', 'btn btn-primary btn-block', 'Get the home-screen profile');
+    extra.href = 'bookshelf.mobileconfig';
+
+    note.innerHTML = 'iPhone will call the profile <strong>Not Signed</strong>. That’s normal for a personal profile. It only adds this one home-screen icon, and you can remove it any time in <strong>Settings → General → VPN &amp; Device Management</strong>.<br><br>'
+      + 'The home-screen app keeps its own copy of your library, separate from Safari. If you’ve already added books in Safari, use <strong>⋯ → Export backup</strong> there first, then <strong>Import backup</strong> in the app.';
   } else {
     step('Open the browser menu <span class="glyph" aria-hidden="true">⋮</span> (top right in Chrome).');
     step('Tap <strong>Install app</strong>. If you only see <strong>Add to home screen</strong>, tap it and then choose <strong>Install</strong>, not <em>Create shortcut</em>.');
     step('Open <strong>Bookshelf</strong> from your home screen or app drawer.');
+    note.textContent = 'Already have an old Bookshelf shortcut with the wrong icon? Delete it from your home screen first, then install again so the new icon is used. Your books aren’t affected.';
   }
 
-  const note = el('p', 'step-text install-note');
-  note.textContent = 'Already have an old Bookshelf shortcut with the wrong icon? Delete it from your home screen first, then add it again so the new icon is used. Your books aren’t affected.';
+  body.append(icon, el('h2', 'step-title', ios ? 'Add it to your Home Screen' : 'Install it as an app'), steps);
+  if (extra) body.append(extra);
+  body.append(note);
 
-  body.append(icon, el('h2', 'step-title', ios ? 'Add it to your Home Screen' : 'Install it as an app'), steps, note);
+  if (ios) {
+    // The plain Safari route, kept as a fallback.
+    const alt = el('details', 'install-alt');
+    alt.append(el('summary', null, 'Or use Safari’s Add to Home Screen'));
+    const altSteps = el('ol', 'install-steps');
+    altSteps.innerHTML = '<li>Tap <strong>Share</strong> <span class="glyph" aria-hidden="true">⬆︎</span>, then <strong>Add to Home Screen</strong>.</li>'
+      + '<li>Make sure <strong>Open as Web App</strong> is on if you see it, then tap <strong>Add</strong>.</li>';
+    alt.append(altSteps);
+    body.append(alt);
+  }
   sheet.append(head, body);
   root.append(sheet);
   document.body.append(root);

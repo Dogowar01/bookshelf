@@ -58,7 +58,7 @@ python3 -m http.server 8000
 2. Open the published `https://<username>.github.io/bookshelf/` link on your phone.
 3. Install it. The app shows an **Install My Bookshelf** banner, and **⋯ → Install app** is in the menu too:
    - **Android (Chrome):** tap **Install**. This creates a real installed app (it appears in your app drawer, with no little Chrome badge on the icon), not a bookmark shortcut. If you install from Chrome's own menu instead, choose **Install app**, not "Add to home screen → Create shortcut".
-   - **iPhone/iPad (Safari):** tap **Share → Add to Home Screen → Add**. The app shows these steps for you.
+   - **iPhone/iPad (Safari):** tap **Install**, then **Get the home-screen profile**, and follow the steps: Settings → **Profile Downloaded** → **Install**. The profile (`bookshelf.mobileconfig`) adds one home-screen icon with the bookcase artwork built in, so iOS doesn't have to fetch the icon from the site, which is the step that kept failing. This is the same fix used for Market Ledger. iPhone calls the profile "Not Signed", which is normal for a personal profile; remove it any time in Settings → General → VPN & Device Management. The plain **Share → Add to Home Screen** route is still listed as a fallback.
 
 It then opens full-screen with the bookcase icon, works offline, and "Take photo" uses the camera.
 
@@ -74,6 +74,10 @@ The icons in `icons/` are made from `icons/logo-source.webp`:
 | `app-icon-192.png`, `app-icon-512.png` | Installed app on Android/desktop, with transparent corners outside the frame |
 | `app-maskable-192.png`, `app-maskable-512.png` | Android launchers that cut icons into circles or other shapes: the bookcase artwork edge to edge, so the shape never cuts through the frame |
 | `favicon-32.png` | Browser tab |
+
+`bookshelf.mobileconfig` (the iPhone home-screen profile) embeds `apple-touch-icon.png`. After changing the icon or the site address, rebuild it with `python3 tools/make_profile.py`.
+
+The service worker never caches icons, the manifest or the profile, so phones always get the current files.
 
 ## Project layout
 
