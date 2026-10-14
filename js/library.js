@@ -33,9 +33,50 @@ let records = []; // every record, including tombstones
 const urlCache = new Map(); // id -> { front, spine, back } object URLs
 const listeners = new Set();
 
+let lostPhotoBooks = [];
+
 export async function load() {
   records = await getAllBooks();
+  // One-time conversion of photos saved by older versions (see db.js): read each one while it's
+  // still readable and store it as raw bytes. Photos Safari has already broken are dropped, so
+  // those books fall back to a plain spine and can be re-photographed.
+  for (let i = 0; i < records.length; i++) {
+    const r = records[i];
+    if (!r.legacyImages) continue;
+    const { legacyImages, ...rest } = r;
+    const images = {};
+    const imageRev = { ...(r.imageRev || {}) };
+    let dropped = false;
+    for (const [k, blob] of Object.entries(r.images || {})) {
+      const copy = await readable(blob);
+      if (copy) images[k] = copy;
+      else {
+        dropped = true;
+        delete imageRev[k];
+      }
+    }
+    const fixed = { ...rest, images, imageRev };
+    await putBook(fixed);
+    records[i] = fixed;
+    if (dropped && !fixed.deleted) lostPhotoBooks.push(fixed.title);
+  }
   return all();
+}
+
+// Titles of books whose photos were already unreadable when the app started.
+export const booksWithLostPhotos = () => lostPhotoBooks;
+
+// Returns an in-memory copy of a photo if it can still be read and decoded, otherwise null.
+async function readable(blob) {
+  try {
+    const bytes = await blob.arrayBuffer();
+    if (!bytes.byteLength) return null;
+    const copy = new Blob([bytes], { type: blob.type || 'image/jpeg' });
+    if ('createImageBitmap' in window) (await createImageBitmap(copy)).close();
+    return copy;
+  } catch {
+    return null;
+  }
 }
 
 export const all = () => records.filter((r) => !r.deleted);

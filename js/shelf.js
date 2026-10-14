@@ -21,24 +21,46 @@ const MIN_SHELVES = COMPARTMENTS.length;
 const GAP = 2;
 const SIDE_PAD = 6;
 const SINK = 4; // how far book bottoms tuck behind the plank's front edge
-const DEFAULT_SPINE_ASPECT = 0.13;
 
-// Height of a book as a fraction of the shelf's clearance.
+// Height of a book as a fraction of the shelf's clearance. Ranges overlap a little so the shelf
+// looks natural rather than in three neat steps.
 export const SIZES = {
-  paperback: { label: 'Paperback', range: [0.64, 0.74] },
-  standard: { label: 'Standard', range: [0.76, 0.85] },
-  hardback: { label: 'Hardback', range: [0.87, 0.95] },
+  paperback: { label: 'Paperback', range: [0.55, 0.7] },
+  standard: { label: 'Standard', range: [0.68, 0.84] },
+  hardback: { label: 'Hardback', range: [0.82, 0.98] },
 };
-const AUTO_RANGE = [0.66, 0.95];
+const AUTO_RANGE = [0.58, 0.97];
+
+// Page counts mapped onto spine thickness: a 60-page novella is slim, a 1,000-page epic is fat.
+const THIN_PAGES = 60;
+const THICK_PAGES = 1000;
 
 export function spineSize(book, clearance) {
   const [lo, hi] = (SIZES[book.size] || {}).range || AUTO_RANGE;
   const h = Math.round(clearance * (lo + (hi - lo) * jitter(book.id)));
-  const aspect = (book.images && book.images.spine && book.spineAspect) || DEFAULT_SPINE_ASPECT;
-  // A floor on width keeps titles legible on very thin books.
+
+  // A floor on width keeps titles legible on very thin books; a ceiling stops doorstops
+  // taking over the shelf.
+  // The ceiling follows the shelf, not the book's height, so a fat paperback still looks fat;
+  // it's only capped at 62% of its own height so it never looks like a box.
   const minW = Math.max(18, clearance * 0.12);
-  const w = Math.round(Math.min(h * 0.38, Math.max(minW, h * aspect)));
-  return { w, h };
+  const maxW = Math.max(minW + 10, Math.min(clearance * 0.36, h * 0.62));
+  const photo = book.images && book.images.spine && book.spineAspect ? h * book.spineAspect : null;
+
+  let w;
+  if (book.pages) {
+    // Square root spreads the common 150–500 page range out, so similar books still differ.
+    const t = Math.sqrt(Math.min(1, Math.max(0, (book.pages - THIN_PAGES) / (THICK_PAGES - THIN_PAGES))));
+    w = minW + t * (maxW - minW);
+    // Keep a spine photo from being stretched or squashed out of recognition.
+    if (photo) w = Math.min(Math.max(w, photo * 0.75), photo * 1.6);
+  } else if (photo) {
+    w = photo;
+  } else {
+    // No page count or photo: a believable, stable thickness per book.
+    w = h * (0.1 + 0.1 * jitter(`${book.id}:w`));
+  }
+  return { w: Math.round(Math.min(maxW, Math.max(minW, w))), h };
 }
 
 /**

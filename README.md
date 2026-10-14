@@ -5,7 +5,7 @@ A personal digital bookshelf for the books you want to read, are reading, and ha
 - **Find a book fast.** Scan the barcode on the back, type the ISBN, or search by title or author. The title, author, page count, year and a suggested genre are filled in from Open Library (with Google Books as a fallback). You can also use the published cover if you don't want to photograph the front.
 - **Photograph each book three times**: the front cover, the spine and the back cover. Crop each photo with a drag box. You can shoot the spine standing up or lying flat; it is turned upright automatically.
 - **Your shelf shows the real spines**, standing on the shelves of a rustic wooden bookcase. Brass plaques mark *Currently reading*, *Want to read* and *Read*. The bookcase grows extra shelves as your library grows.
-- **Books vary in size.** Choose Paperback, Standard or Hardback for each one, and heights vary a little within each size. Spines never get too thin to read, and long titles shrink to fit.
+- **Books vary in size.** Choose Paperback, Standard or Hardback for each one, and heights vary within each size. **Page count sets the thickness**: a 100-page novella is slim, a 1,000-page epic is fat (a spine photo is kept close to its real shape). Spines never get too thin to read, and long titles shrink to fit.
 - **Tap a spine** and the book slides off the shelf and turns to show its front cover. **Turn over** shows the back.
 - **Tap the cover** to open the book. The first page shows:
   - your star rating, genre, format and page count
@@ -23,7 +23,9 @@ A personal digital bookshelf for the books you want to read, are reading, and ha
 
 ## Your data
 
-Everything is stored **on your device** in the browser (IndexedDB). Unless you turn on sync, nothing is uploaded anywhere.
+Everything is stored **on your device** in the browser (IndexedDB). Unless you turn on sync, nothing is uploaded anywhere. Photos are stored as raw image bytes rather than browser "Blob" objects, because Safari can corrupt a Blob that is saved, read back and saved again (WebKit bugs 235687 and 240216).
+
+**Updates:** the app always fetches the latest version when online. It checks whenever you reopen it, and reloads itself when an update arrives. You can also use **⋯ → Check for updates**.
 
 - **Backups:** **⋯ → Export backup** saves a `.json` file with all your books and photos, and **Import backup** restores it, for example on a new phone. The app reminds you if you haven't backed up for two weeks (unless sync is on), and the menu shows when you last did.
 - **Sync** keeps your library safe online and the same on all your devices. See below.

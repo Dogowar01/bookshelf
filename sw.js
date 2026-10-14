@@ -2,7 +2,7 @@
 // Icons, the manifest and the home-screen profile are never cached or served from the cache, so a
 // phone always gets the real files (an old cached icon is what breaks home-screen icons).
 // Bump VERSION when shipping changes so old caches are cleared.
-const VERSION = 'v5';
+const VERSION = 'v6';
 const CACHE = `bookshelf-${VERSION}`;
 const SHELL = [
   './',
@@ -29,7 +29,7 @@ const SHELL = [
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: 'no-cache' })))));
   self.skipWaiting();
 });
 
@@ -45,8 +45,13 @@ self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
   const url = new URL(e.request.url);
   if (url.origin !== location.origin || /\.(png|ico|webmanifest|mobileconfig)$/.test(url.pathname)) return;
+  // Always ask the server for the latest copy (cache: 'no-cache' revalidates instead of trusting the
+  // browser's short-term HTTP cache), so a single refresh picks up a new version of the app.
+  const fresh = e.request.mode === 'navigate'
+    ? new Request(e.request.url, { cache: 'no-cache', credentials: 'same-origin' })
+    : new Request(e.request, { cache: 'no-cache' });
   e.respondWith(
-    fetch(e.request)
+    fetch(fresh)
       .then((res) => {
         if (res.ok) {
           const copy = res.clone();

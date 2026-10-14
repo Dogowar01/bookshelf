@@ -49,12 +49,12 @@ export function starRow(value, onChange, { large = false } = {}) {
 }
 
 let toastTimer;
-export function toast(message) {
+export function toast(message, ms = 2600) {
   const t = document.getElementById('toast');
   t.textContent = message;
   t.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+  toastTimer = setTimeout(() => t.classList.remove('show'), ms);
 }
 
 export function timeAgo(ms) {

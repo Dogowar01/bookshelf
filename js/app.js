@@ -16,6 +16,8 @@ const $ = (id) => document.getElementById(id);
 const BACKUP_EVERY_MS = 14 * 86400000;
 const SNOOZE_MS = 3 * 86400000;
 
+let swReg = null;
+
 const state = {
   sort: localGet('sort') || 'finished',
   genre: null,
@@ -49,8 +51,29 @@ async function init() {
     resizeTimer = setTimeout(render, 150);
   });
 
+  const lost = library.booksWithLostPhotos();
+  if (lost.length) {
+    toast(`Some photos couldn’t be recovered (${lost.join(', ')}). Edit the book${lost.length === 1 ? '' : 's'} to retake them.`, 9000);
+  }
+
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    // When an updated version of the app takes over, reload once so the new code runs straight
+    // away: a single refresh is all an update needs.
+    const hadController = !!navigator.serviceWorker.controller;
+    let reloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController || reloading) return;
+      reloading = true;
+      location.reload();
+    });
+    navigator.serviceWorker.register('sw.js').then((reg) => {
+      swReg = reg;
+      reg.update();
+      // The home-screen app has no refresh button, so look for updates whenever it's reopened.
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') reg.update().catch(() => {});
+      });
+    }).catch(() => {});
   }
 }
 
@@ -281,6 +304,11 @@ function bindChrome() {
     if (action === 'export') exportBackup();
     else if (action === 'import') $('importInput').click();
     else if (action === 'install') install();
+    else if (action === 'update') {
+      toast('Checking for updates…');
+      if (swReg) await swReg.update().catch(() => {});
+      location.reload();
+    }
     else if (action === 'stats') openStats();
     else if (action === 'sync') openSyncSheet();
     else if (action === 'sounds') {
