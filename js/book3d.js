@@ -4,10 +4,12 @@
 import { urls, FORMATS } from './library.js';
 import { formatDate, el, starRow, today } from './ui.js';
 import { pageTurn, coverClose, slideOut } from './sound.js';
+import { confetti, revealChildren } from './motion.js';
 
 const FLY_MS = 850;
 const COVER_MS = 750;
 const DEFAULT_COVER_ASPECT = 0.66;
+const HINT_CLOSED = 'Tap the cover to open · swipe to spin';
 
 let active = null;
 
@@ -64,7 +66,9 @@ class FloatingBook {
 
     const stage = el('div', 'book-stage');
     this.pos = el('div', 'book-pos');
+    this.floatEl = el('div', 'book-float');
     this.shiftEl = el('div', 'book-shift');
+    this.angle = 0; // the book's turn in degrees: 0 is the front, ±180 the back
     this.shiftEl.style.setProperty('--shift', `${this.shift}px`);
     this.box = el('div', 'book3d');
     Object.assign(this.box.style, { width: `${W}px`, height: `${H}px` });
@@ -109,10 +113,12 @@ class FloatingBook {
     this.box.appendChild(this.cover);
 
     this.shiftEl.appendChild(this.box);
-    this.pos.appendChild(this.shiftEl);
+    this.floatEl.appendChild(this.shiftEl);
+    this.pos.appendChild(this.floatEl);
+    this.enableSpin();
     stage.appendChild(this.pos);
 
-    this.hint = el('p', 'book-hint', 'Tap the cover to open');
+    this.hint = el('p', 'book-hint', HINT_CLOSED);
     this.flipBtn = el('button', 'btn btn-ghost', 'Turn over');
     this.flipBtn.addEventListener('click', () => this.flip());
     const closeBtn = el('button', 'btn btn-ghost', 'Back to shelf');
@@ -160,7 +166,10 @@ class FloatingBook {
     }
 
     if (b.status !== 'want') {
-      inner.append(starRow(b.rating || 0, (r) => this.update({ rating: r })));
+      // Save without redrawing the page: the stars already show the new rating and are mid-animation.
+      inner.append(starRow(b.rating || 0, async (r) => {
+        this.book = await this.actions.update(this.book, { rating: r });
+      }));
     }
     const tags = el('div', 'tags');
     if (b.genre) tags.append(el('span', 'genre-tag', b.genre));
@@ -240,6 +249,7 @@ class FloatingBook {
 
   finish() {
     pageTurn();
+    confetti();
     return this.update({ status: 'read', finishedAt: this.book.finishedAt || today(), currentPage: this.book.pages || this.book.currentPage }, 'Finished! It’s moved to your Read shelf.');
   }
 
@@ -312,8 +322,68 @@ class FloatingBook {
       this.pos.style.transform = f.centre;
       anim.cancel();
       this.shiftEl.classList.add('settled');
+      this.root.classList.add('floating');
       this.busy = false;
     });
+  }
+
+  // Drag sideways to spin the book round (front, spine, back…); let go and it settles on whichever
+  // side is nearest, carrying on a little if flicked. A tap still opens the cover.
+  enableSpin() {
+    let drag = null;
+    this.box.addEventListener('pointerdown', (e) => {
+      if (this.busy || this.isOpen) return;
+      // Don't capture the pointer yet: until the finger actually moves this is a tap, and capturing
+      // would send the tap to the book instead of the cover.
+      drag = { id: e.pointerId, x: e.clientX, y: e.clientY, start: this.angle, moved: false, lastX: e.clientX, lastT: e.timeStamp, v: 0 };
+    });
+    this.box.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      const dx = e.clientX - drag.x;
+      const dy = e.clientY - drag.y;
+      if (!drag.moved && Math.hypot(dx, dy) < 8) return;
+      if (!drag.moved) {
+        drag.moved = true;
+        this.root.classList.add('spinning');
+        this.box.setPointerCapture(drag.id);
+      }
+      // Smoothed finger speed in px/ms, so one jittery event can't fake a flick.
+      const dt = Math.max(8, e.timeStamp - drag.lastT);
+      drag.v = drag.v * 0.6 + ((e.clientX - drag.lastX) / dt) * 0.4;
+      drag.lastX = e.clientX;
+      drag.lastT = e.timeStamp;
+      this.angle = drag.start + dx * 0.6;
+      const tilt = Math.max(-14, Math.min(14, -dy * 0.12));
+      this.box.style.transform = `rotateX(${tilt}deg) rotateY(${this.angle}deg)`;
+    });
+    const end = (e) => {
+      if (!drag) return;
+      const { moved } = drag;
+      // A finger that stopped before lifting off isn't flicking.
+      const v = e.timeStamp - drag.lastT > 80 ? 0 : drag.v;
+      drag = null;
+      if (!moved) return;
+      this.justSpun = true;
+      setTimeout(() => (this.justSpun = false), 50);
+      this.root.classList.remove('spinning');
+      // Carry a flick on by up to about half a turn, then settle on the nearest face.
+      const carry = Math.max(-200, Math.min(200, v * 220));
+      this.turnTo(Math.round((this.angle + carry) / 180) * 180);
+    };
+    this.box.addEventListener('pointerup', end);
+    this.box.addEventListener('pointercancel', end);
+    // A drag shouldn't also count as a tap on the cover or back.
+    this.box.addEventListener('click', (e) => {
+      if (this.justSpun) e.stopPropagation();
+    }, true);
+  }
+
+  turnTo(angle) {
+    this.angle = angle;
+    this.box.style.transform = `rotateY(${angle}deg)`;
+    this.isFlipped = Math.round(angle / 180) % 2 !== 0;
+    this.root.classList.toggle('is-flipped', this.isFlipped);
+    this.hint.textContent = this.isFlipped ? 'Tap to turn back over' : HINT_CLOSED;
   }
 
   toggleCover() {
@@ -321,26 +391,30 @@ class FloatingBook {
     this.isOpen = !this.isOpen;
     (this.isOpen ? pageTurn : coverClose)();
     this.root.classList.toggle('is-open', this.isOpen);
-    this.hint.textContent = this.isOpen ? 'Tap the inside cover to close' : 'Tap the cover to open';
+    this.hint.textContent = this.isOpen ? 'Tap the inside cover to close' : HINT_CLOSED;
     this.flipBtn.disabled = this.isOpen;
+    if (this.isOpen) {
+      const inner = this.page.querySelector('.page-inner');
+      if (inner) revealChildren(inner, 280);
+    }
   }
 
   flip() {
     if (this.busy || this.isOpen) return;
-    this.isFlipped = !this.isFlipped;
     slideOut();
-    this.root.classList.toggle('is-flipped', this.isFlipped);
-    this.hint.textContent = this.isFlipped ? 'Tap to turn back over' : 'Tap the cover to open';
+    this.turnTo(this.angle - 180);
   }
 
   async close({ toShelf = true } = {}) {
     if (this.closing) return this.closing;
     this.closing = (async () => {
       this.busy = true;
+      this.root.classList.remove('floating');
       if (this.isOpen || this.isFlipped) {
         if (this.isOpen) coverClose();
-        this.root.classList.remove('is-open', 'is-flipped');
-        this.isOpen = this.isFlipped = false;
+        this.root.classList.remove('is-open');
+        this.isOpen = false;
+        if (this.isFlipped) this.turnTo(Math.round(this.angle / 360) * 360);
         await wait(COVER_MS);
       }
       this.shiftEl.classList.remove('settled');

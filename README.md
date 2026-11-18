@@ -5,7 +5,8 @@ A personal digital bookshelf for the books you want to read, are reading, and ha
 - **Find a book fast.** Scan the barcode on the back, type the ISBN, or search by title or author. The title, author, page count, year and a suggested genre are filled in from Open Library (with Google Books as a fallback). You can also use the published cover if you don't want to photograph the front.
 - **Photograph each book three times**: the front cover, the spine and the back cover. Crop each photo with a drag box. You can shoot the spine standing up or lying flat; it is turned upright automatically.
 - **Your shelf shows the real spines**, standing on the shelves of a rustic wooden bookcase. Brass plaques mark *Currently reading*, *Want to read* and *Read*. The bookcase grows extra shelves as your library grows.
-- **Books vary in size.** Choose Paperback, Standard or Hardback for each one, and heights vary within each size. **Page count sets the thickness**: a 100-page novella is slim, a 1,000-page epic is fat (a spine photo is kept close to its real shape). Spines never get too thin to read, and long titles shrink to fit.
+- **Books vary in size.** **Page count sets both height and thickness**: a 100-page novella is small and slim, a 1,000-page epic tall and fat. Paperback, Standard or Hardback sets the general height range, and each book varies a little within it. A spine photo is kept close to its real shape, spines never get too thin to read, and long titles shrink to fit.
+- **Animation:** books drop onto the shelves when the app opens and glide to their new places when you sort, filter, search or add a book. A tapped spine tips forward before the book lifts out. The floating book bobs gently, and you can **swipe it to spin it round** to the spine and back. The cover swings open with a little spring, stars sparkle when you rate, finishing a book sets off confetti, and dust drifts through the sunlight over the bookcase. If Reduce Motion is turned on in the phone's accessibility settings, all of this is switched off.
 - **Tap a spine** and the book slides off the shelf and turns to show its front cover. **Turn over** shows the back.
 - **Tap the cover** to open the book. The first page shows:
   - your star rating, genre, format and page count
@@ -95,6 +96,7 @@ The service worker never caches icons, the manifest or the profile, so phones al
 | `js/arrange.js` | Drag-to-reorder on the shelf |
 | `js/sync.js`, `js/syncui.js`, `supabase/setup.sql` | Optional sync through Supabase |
 | `js/sound.js` | Page-turn sounds (generated, no audio files) |
+| `js/motion.js` | Animations: books dropping in and gliding, tip-out, sparkles, confetti, dust |
 | `js/cropper.js`, `js/images.js` | Photo cropping, rotation and compression |
 | `js/library.js`, `js/db.js` | Storage and backup import/export |
 | `sw.js`, `manifest.webmanifest`, `js/install.js` | Offline support and installing to the home screen |

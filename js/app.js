@@ -3,6 +3,7 @@ import * as sync from './sync.js';
 import { requestPersistence } from './db.js';
 import { renderBookcase } from './shelf.js';
 import { showBook, activeBookId } from './book3d.js';
+import { snapshot, glide, dropIn, tipOut, addDust } from './motion.js';
 import { openEditor } from './editor.js';
 import { openStats } from './stats.js';
 import { openSyncSheet } from './syncui.js';
@@ -30,10 +31,11 @@ async function init() {
   await library.load();
   $('sortSel').value = state.sort;
   bindChrome();
-  render();
+  render('drop');
+  addDust($('ambience'));
 
   library.onChange(() => {
-    render();
+    render('glide');
     updateMenuNotes();
   });
   sync.onStatus(updateMenuNotes);
@@ -48,7 +50,7 @@ async function init() {
     if (window.innerWidth === lastWidth) return; // ignore mobile URL-bar height changes
     lastWidth = window.innerWidth;
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(render, 150);
+    resizeTimer = setTimeout(() => render('none'), 150);
   });
 
   const lost = library.booksWithLostPhotos();
@@ -81,7 +83,9 @@ async function init() {
 
 const byOrder = (a, b) => (a.order || 0) - (b.order || 0) || (a.createdAt || 0) - (b.createdAt || 0);
 
-function render() {
+// motion: 'glide' (books slide to their new places), 'drop' (books fall onto the shelves, used on
+// first load) or 'none' (e.g. after a resize, when every position changes at once).
+function render(motion = 'glide') {
   const books = library.all();
   const reading = books.filter((b) => b.status === 'reading').sort(byOrder);
   const want = books.filter((b) => b.status === 'want').sort(byOrder);
@@ -100,15 +104,25 @@ function render() {
 
   const q = state.query.trim().toLowerCase();
   const match = q ? (b) => [b.title, b.author, b.genre, b.isbn, b.lentTo].some((v) => v && String(v).toLowerCase().includes(q)) : null;
+  const before = motion === 'glide' ? snapshot($('bookcase')) : null;
   renderBookcase($('bookcase'), sections, { onPick: pickBook, match });
   $('bookcase').classList.toggle('arranging', state.arranging);
+  if (motion === 'drop') dropIn($('bookcase'));
+  else if (motion === 'glide') glide($('bookcase'), before);
   const out = activeBookId();
   if (out) document.querySelector(`.spine[data-id="${CSS.escape(out)}"]`)?.classList.add('lifted');
 }
 
-function pickBook(book, spine) {
-  if (state.arranging) return;
+let picking = false;
+async function pickBook(book, spine) {
+  if (state.arranging || picking) return;
+  picking = true;
+  // The spine tips forward off the shelf, then the book lifts out from there.
+  const tip = tipOut(spine);
+  if (tip) await tip.finished.catch(() => {});
   showBook(book, spine, bookActions);
+  if (tip) tip.cancel();
+  picking = false;
 }
 
 function renderStats(read, reading, want) {
@@ -181,11 +195,7 @@ async function editBook(book) {
   if (!saved) return;
   toast(book ? 'Saved' : `“${saved.title}” is on your shelf`);
   const spine = document.querySelector(`.spine[data-id="${CSS.escape(saved.id)}"]`);
-  if (spine) {
-    spine.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    spine.classList.add('arrived');
-    setTimeout(() => spine.classList.remove('arrived'), 1400);
-  }
+  if (spine) spine.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 // ---- Arranging ----

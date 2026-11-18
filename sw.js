@@ -2,7 +2,7 @@
 // Icons, the manifest and the home-screen profile are never cached or served from the cache, so a
 // phone always gets the real files (an old cached icon is what breaks home-screen icons).
 // Bump VERSION when shipping changes so old caches are cleared.
-const VERSION = 'v6';
+const VERSION = 'v7';
 const CACHE = `bookshelf-${VERSION}`;
 const SHELL = [
   './',
@@ -18,6 +18,7 @@ const SHELL = [
   'js/install.js',
   'js/library.js',
   'js/lookup.js',
+  'js/motion.js',
   'js/shelf.js',
   'js/sound.js',
   'js/stats.js',

@@ -1,5 +1,7 @@
 // Small DOM helpers shared across views.
 
+import { sparkle, reducedMotion } from './motion.js';
+
 export function el(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -40,6 +42,13 @@ export function starRow(value, onChange, { large = false } = {}) {
       e.stopPropagation();
       value = value === i ? 0 : i;
       draw(value);
+      if (value && !reducedMotion()) {
+        // Stars light up one after another, and the tapped one bursts.
+        [...row.children].slice(0, value).forEach((star, j) => {
+          star.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.45) rotate(-12deg)' }, { transform: 'scale(1)' }], { duration: 380, delay: j * 50, easing: 'ease-out' });
+        });
+        sparkle(s, 6 + value * 2);
+      }
       onChange(value);
     });
     row.appendChild(s);
